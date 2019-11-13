@@ -1,0 +1,201 @@
+version: "3.7"
+
+services:
+        bindserver:
+                build:
+                        context: BindServer
+                        dockerfile: Dockerfile
+                volumes:
+                        - ./BindServer/config:/etc/bind 
+                links:
+                        - "webgoat:webgoat"
+                        - "web:web"
+                        - "curler:curler"
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.5"
+                dns: "10.8.10.5"
+                expose: ["53"]
+                command: ["named", "-c", "/etc/bind/named.conf", "-g", "-u","root"]
+                stdin_open: true
+                tty: true
+        web:
+                build:
+                        context: Apache
+                        dockerfile: Dockerfile
+                
+                working_dir: /var/www/html
+                volumes:
+                        - ./Apache/config:/etc/apache2
+                        - ./Apache/pages:/var/www/
+                        - ./Apache/certs:/etc/certs/
+                links:
+                        - "webgoat:webgoat"
+                        - "badstore:badstore"
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.3"
+                expose: ["80","443"]
+                dns: "10.8.10.5"
+                command: ["apache2ctl", "-D", "FOREGROUND"]
+                stdin_open: true
+                tty: true
+
+ 
+        curler:
+                image: debian:latest
+                links:
+                        - "web:web"
+                volumes:
+                        - ./Curler/config:/root/
+                networks:
+                        - HIR
+                dns: "10.8.10.5"
+
+        webgoat:
+                image: szsecurity/webgoat
+                expose: ["80"] 
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.21"
+ 
+        badstore:
+                image: jvhoof/badstore-docker
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.22"
+ 
+        dwa:
+                image: vulnerables/web-dvwa
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.23"
+ 
+        mutillidae:
+                image: szsecurity/mutillidae
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.24"
+ 
+        bwap:
+                image: raesene/bwapp
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.25"
+ 
+        jucieshop:
+                image: bkimminich/juice-shop
+                networks:
+                        - HIR
+                networks:
+                        HIR:
+                           ipv4_address: "10.8.10.26"
+ 
+        nessus:
+                image: sometheycallme/docker-nessus
+                expose: [8834]
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.10"
+                dns: "10.8.10.5"
+        
+        wordpress:
+                image: wordpress
+                restart: always
+                expose: [80, 443]
+                depends_on: 
+                        - db
+                environment:
+                        WORDPRESS_DB_HOST: db:3306
+                        WORDPRESS_DB_USER: user
+                        WORDPRESS_DB_PASSWORD: user
+                        WORDPRESS_DB_NAME: wordpress
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.27"
+                links:
+                        - "db:db"
+
+        db:
+                image: mysql:5.7
+                restart: always
+                environment:
+                        MYSQL_DATABASE: wordpress
+                        MYSQL_USER: user
+                        MYSQL_PASSWORD: user
+                        MYSQL_RANDOM_ROOT_PASSWORD: '1'
+                networks:
+                        HIR:
+                            ipv4_address: "10.8.10.9"
+
+        mhn:
+                build:
+                        context: mhn
+                        dockerfile: Dockerfile
+                environment:
+                        SUPERUSER_EMAIL: "user@localhost"
+                        SUPERUSER_PASSWORD: "Password123"
+                        SERVER_BASE_URL: "http://mhn"
+                        HONEYMAP_URL: "http://mhn:3000"
+                networks:
+                        MHN:
+                                ipv4_address: "10.9.10.2"
+                        HIR:
+                                ipv4_address: "10.8.10.50"
+                dns: "10.8.10.5"
+        hp01:
+                build:
+                        context: Honeypot
+                        dockerfile: Dockerfile
+                depends_on:
+                        - "mhn"
+                links:
+                        - "mhn:mhn"
+                stdin_open: true
+                tty: true
+                networks:
+                        MHN:
+                                ipv4_address: "10.9.10.10"
+                dns: "10.8.10.5"
+        
+        hp02:
+                build:
+                        context: Honeypot
+                        dockerfile: Dockerfile
+                depends_on:
+                        - "mhn"
+                links:
+                        - "mhn:mhn"
+                stdin_open: true
+                tty: true
+                networks:
+                        MHN:
+                                ipv4_address: "10.9.10.11"
+                dns: "10.8.10.5"
+
+        hp03:
+                build:
+                        context: Honeypot
+                        dockerfile: Dockerfile
+                depends_on:
+                        - "mhn"
+                links:
+                        - "mhn:mhn"
+                stdin_open: true
+                tty: true
+                networks:
+                        HIR:
+                                ipv4_address: "10.8.10.51"
+                dns: "10.8.10.5"
+
+networks:
+        HIR:
+            driver: bridge
+            ipam:
+                 config:
+                     - subnet: "10.8.10.0/24"
+        MHN:
+           driver: bridge
+           ipam:
+                   config:
+                           - subnet: "10.9.10.0/24"
